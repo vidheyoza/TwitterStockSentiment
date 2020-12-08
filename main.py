@@ -97,11 +97,11 @@ def retrieving_tweets_polarity(symbol):
     for tweet in tweets:
         tw = tweet.full_text
         blob = TextBlob(tw)
-        tweet_polarity = 0
+        polarity = 0
         for sentence in blob.sentences:
-            tweet_polarity += sentence.sentiment.polarity
+            polarity += sentence.sentiment.polarity
             global_polarity += sentence.sentiment.polarity
-        tweet_list.append(Tweet(tw, tweet_polarity))
+        tweet_list.append(Tweet(tw, polarity))
         # print("Polarity: ", polarity)
 
     global_polarity = global_polarity / len(tweet_list)
