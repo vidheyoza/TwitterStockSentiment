@@ -1,15 +1,15 @@
 import datetime as dt
 import math
 
-import yfinance as yf
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import tweepy
+import matplotlib.pyplot as plt
 from matplotlib import style
 from sklearn import preprocessing
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split
+import yfinance as yf
+import tweepy
 from textblob import TextBlob
 
 import constants as ct
@@ -18,20 +18,22 @@ from Tweet import Tweet
 style.use('ggplot')
 
 
-def check_stock_symbol(flag=False, companies_file='companylist.csv'):
+def check_stock_symbol(companies_file='nasdaq_list.csv'):
     df = pd.read_csv(companies_file, usecols=[0])
+    ticker = 'AAPL'
+    is_stock_valid = False
 
-    symbol = 'AAPL'
-    while flag is False:
-        symbol = input('Enter a stock symbol to retrieve data from: ').upper()
+    while is_stock_valid is False:
+        ticker = input('Enter a stock symbol to retrieve data from: ').upper()
         for index in range(len(df)):
-            if df['Symbol'][index] == symbol:
-                flag = True
-    return flag, symbol
+            if df['Symbol'][index] == ticker:
+                is_stock_valid = True
+
+    return is_stock_valid, ticker
 
 
-def get_stock_data(symbol, from_date, to_date):
-    data = yf.download(symbol, start=from_date, end=to_date)
+def get_stock_data(ticker, from_date, to_date):
+    data = yf.download(tickers=ticker, start=from_date, end=to_date)
     df = pd.DataFrame(data=data)
 
     df = df[['Open', 'High', 'Low', 'Close', 'Volume']]
@@ -89,24 +91,25 @@ def retrieving_tweets_polarity(symbol):
     user = tweepy.API(auth)
 
     tweets = tweepy.Cursor(user.search, q=str(symbol), tweet_mode='extended', lang='en').items(ct.num_of_tweets)
-    # nltk.download('punkt')
 
     tweet_list = []
     global_polarity = 0
     for tweet in tweets:
         tw = tweet.full_text
         blob = TextBlob(tw)
-        polarity = 0
+        tweet_polarity = 0
         for sentence in blob.sentences:
-            polarity += sentence.sentiment.polarity
+            tweet_polarity += sentence.sentiment.polarity
             global_polarity += sentence.sentiment.polarity
-        tweet_list.append(Tweet(tw, polarity))
+        tweet_list.append(Tweet(tw, tweet_polarity))
+        # print("Polarity: ", polarity)
 
     global_polarity = global_polarity / len(tweet_list)
     return global_polarity
 
 
 def recommending(df, forecast_out, global_polarity):
+    print('Market Sentiment: ', global_polarity)
     if df.iloc[-forecast_out - 1]['Close'] < df.iloc[-1]['Prediction']:
         if global_polarity > 0:
             print(
@@ -121,21 +124,25 @@ def recommending(df, forecast_out, global_polarity):
 
 
 if __name__ == "__main__":
-    (flag, symbol) = check_stock_symbol(False, 'companylist.csv')
+    (flag, symbol) = check_stock_symbol()
     if flag:
+        # Setup timeline from today till 2 years ago
         actual_date = dt.date.today()
-        past_date = actual_date - dt.timedelta(days=365 * 3)
-
+        past_date = actual_date - dt.timedelta(days=(365 * 2))
         actual_date = actual_date.strftime("%Y-%m-%d")
         past_date = past_date.strftime("%Y-%m-%d")
 
         print("Retrieving Stock Data from introduced symbol...")
         dataframe = get_stock_data(symbol, past_date, actual_date)
+
         print("Forecasting stock DataFrame...")
-        (dataframe, forecast_out) = stock_forecasting(dataframe)
+        (dataframe, forecast_price) = stock_forecasting(dataframe)
+
         print("Plotting existing and forecasted values...")
         forecast_plot(dataframe)
+
         print("Retrieving %s related tweets polarity..." % symbol)
         polarity = retrieving_tweets_polarity(symbol)
+
         print("Generating recommendation based on prediction & polarity...")
-        recommending(dataframe, forecast_out, polarity)
+        recommending(dataframe, forecast_price, polarity)
