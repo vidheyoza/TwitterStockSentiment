@@ -1,2 +1,6 @@
 # File containing confidential Twitter API keys 
 constants.py
+
+# Pycharm
+.idea
+__pycache__/
