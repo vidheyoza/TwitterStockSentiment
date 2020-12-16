@@ -19,17 +19,17 @@ style.use('ggplot')
 
 
 def check_stock_symbol(companies_file='nasdaq_list.csv'):
-    df = pd.read_csv(companies_file, usecols=[0])
+    df = pd.read_csv(companies_file)
     ticker = 'AAPL'
-    is_stock_valid = False
+    c_name = ''
 
-    while is_stock_valid is False:
+    while c_name == '':
         ticker = input('Enter a stock symbol to retrieve data from: ').upper()
         for index in range(len(df)):
             if df['Symbol'][index] == ticker:
-                is_stock_valid = True
+                c_name = df['Name'][index]
 
-    return is_stock_valid, ticker
+    return c_name, ticker
 
 
 def get_stock_data(ticker, from_date, to_date):
@@ -57,6 +57,8 @@ def stock_forecasting(df):
     df.dropna(inplace=True)
     y = np.array(df['Label'])
 
+    # print(X)
+
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.5)
 
     clf = LinearRegression(n_jobs=-1)
@@ -69,28 +71,33 @@ def stock_forecasting(df):
     last_date = df.iloc[-1].name
     last_date = dt.datetime.strptime(str(last_date), "%Y-%m-%d %H:%M:%S")
 
+    # print(df.index)
+
     for pred in forecast:
         last_date += dt.timedelta(days=1)
         df.loc[last_date.strftime("%Y-%m-%d")] = [np.nan for _ in range(len(df.columns) - 1)] + [pred]
     return df, forecast_out
 
 
-def forecast_plot(df):
-    df['Close'].plot(color='black')
-    df['Prediction'].plot(color='green')
-    plt.legend(loc=4)
+def forecast_plot(df, ticker):
+    plt.plot(df.index, df['Close'], color='black', label='Close')
+    plt.plot(df.index, df['Prediction'], color='green', label='Prediction')
+
+    plt.legend()
     plt.xlabel('Date')
     plt.ylabel('Price')
-    plt.xticks(rotation=75)
+    plt.xticks(rotation=90)
+
+    plt.savefig('plots/' + ticker + '.png', bbox_inches='tight')
     plt.show()
 
 
-def retrieving_tweets_polarity(symbol):
+def retrieving_tweets_polarity(query):
     auth = tweepy.OAuthHandler(ct.consumer_key, ct.consumer_secret)
     auth.set_access_token(ct.access_token, ct.access_token_secret)
     user = tweepy.API(auth)
 
-    tweets = tweepy.Cursor(user.search, q=str(symbol), tweet_mode='extended', lang='en').items(ct.num_of_tweets)
+    tweets = tweepy.Cursor(user.search, q=str(query), tweet_mode='extended', lang='en').items(ct.num_of_tweets)
 
     tweet_list = []
     global_polarity = 0
@@ -102,6 +109,7 @@ def retrieving_tweets_polarity(symbol):
             polarity += sentence.sentiment.polarity
             global_polarity += sentence.sentiment.polarity
         tweet_list.append(Tweet(tw, polarity))
+        print(Tweet(tw, polarity))
         # print("Polarity: ", polarity)
 
     global_polarity = global_polarity / len(tweet_list)
@@ -124,8 +132,8 @@ def recommending(df, forecast_out, global_polarity):
 
 
 if __name__ == "__main__":
-    (flag, symbol) = check_stock_symbol()
-    if flag:
+    (company_name, symbol) = check_stock_symbol()
+    if company_name != '':
         # Setup timeline from today till 2 years ago
         actual_date = dt.date.today()
         past_date = actual_date - dt.timedelta(days=(365 * 2))
@@ -139,10 +147,10 @@ if __name__ == "__main__":
         (dataframe, forecast_price) = stock_forecasting(dataframe)
 
         print("Plotting existing and forecasted values...")
-        forecast_plot(dataframe)
+        forecast_plot(dataframe, symbol)
 
         print("Retrieving %s related tweets polarity..." % symbol)
-        polarity = retrieving_tweets_polarity(symbol)
+        polarity = retrieving_tweets_polarity(company_name)
 
         print("Generating recommendation based on prediction & polarity...")
         recommending(dataframe, forecast_price, polarity)
